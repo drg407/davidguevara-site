@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>VR Line Rider</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#0b0d12;
+    font-family:-apple-system,Segoe UI,Roboto,sans-serif; color:#e8ecf3; }
+  #overlay { position:fixed; left:50%; top:24px; transform:translateX(-50%); max-width:520px; width:92%;
+    background:rgba(20,24,33,.92); border:1px solid #2a3242; border-radius:14px; padding:16px 18px; z-index:10; }
+  #overlay h1 { font-size:18px; margin-bottom:8px; }
+  #overlay p { font-size:13px; line-height:1.5; color:#aab4c5; }
+  #overlay .keys { margin-top:10px; font-size:12px; color:#c7d0de; }
+  #overlay .keys b { color:#8fd3ff; }
+  #msg { color:#ff8a8a; font-size:13px; margin-top:8px; }
+</style>
+</head>
+<body>
+  <div id="overlay">
+    <h1>VR Line Rider</h1>
+    <p>Put on your headset and press <b>Enter VR</b>. Aim a controller at the panel and hold the
+       <b>trigger</b> to draw a track. Draw <b>left → right</b> so the sled rides on top.</p>
+    <div class="keys">
+      <b>Trigger</b> draw &nbsp;·&nbsp; <b>A</b> play/pause &nbsp;·&nbsp; <b>B</b> reset &nbsp;·&nbsp; <b>Y</b> clear
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <script type="importmap">
+  { "imports": {
+      "three": "./three.module.js"
+  }}
+  </script>
+
+  <script type="module">
+  import * as THREE from 'three';
+  import { VRButton } from './VRButton.js';
+
+  // ---------- constants ----------
+  const PLANE_Z = -1.4;
+  const PLANE_X = [-1.1, 1.1];
+  const PLANE_Y = [0.3, 2.3];
+  const START = new THREE.Vector2(-0.85, 2.05);
+  const MIN_SEG_LEN = 0.04;
+  const DT = 1/120;
+  const GRAVITY = -4.0;
+  const FRICTION = 0.03;
+  const THICKNESS = 0.05;
+  const SEG_EXT = 0.01;
+  const CONSTRAINT_ITERS = 8;
+  const ENDURANCE = 1.6;
+  const SEG_RADIUS = 0.012;
+
+  // rest layout (local unit shape; x = ride direction, y = up). Scaled by RIDER_SCALE.
+  const RIDER_SCALE = 0.55;
+  const REST = [
+    [-0.35, 0.00], // 0 sled back bottom
+    [ 0.35, 0.00], // 1 sled front bottom
+    [-0.35, 0.18], // 2 sled back top
+    [ 0.35, 0.18], // 3 sled front top
+    [ 0.00, 0.18], // 4 body butt
+    [ 0.05, 0.70], // 5 body head
+  ].map(([x,y]) => [x*RIDER_SCALE, y*RIDER_SCALE]);
+  const CONSTRAINT_DEFS = [
+    [0,1,'sled'],[2,3,'sled'],[0,2,'sled'],[1,3,'sled'],[0,3,'sled'],[1,2,'sled'],
+    [4,5,'spine'],
+    [4,2,'bind'],[4,3,'bind'],[5,3,'bind'],
+  ];
+
+  // ---------- scene ----------
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0b0d12);
+  const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.05, 100);
+  camera.position.set(0, 1.6, 0);
+
+  const renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setPixelRatio(devicePixelRatio);
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
+  document.body.appendChild(VRButton.createButton(renderer));
+  addEventListener('resize', ()=>{
+    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+  });
+
+  scene.add(new THREE.HemisphereLight(0xbcd0ff, 0x202830, 1.1));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8); dir.position.set(1,3,2); scene.add(dir);
+
+  const grid = new THREE.GridHelper(10, 20, 0x2a3242, 0x1a2030); scene.add(grid);
+
+  // drawing plane + border
+  const planeW = PLANE_X[1]-PLANE_X[0], planeH = PLANE_Y[1]-PLANE_Y[0];
+  const planeMid = new THREE.Vector3((PLANE_X[0]+PLANE_X[1])/2, (PLANE_Y[0]+PLANE_Y[1])/2, PLANE_Z);
+  const planeMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(planeW, planeH),
+    new THREE.MeshBasicMaterial({ color:0x3a6ea5, transparent:true, opacity:0.07, side:THREE.DoubleSide })
+  );
+  planeMesh.position.copy(planeMid); scene.add(planeMesh);
+  const border = new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.PlaneGeometry(planeW, planeH)),
+    new THREE.LineBasicMaterial({ color:0x4a8fd0 })
+  );
+  border.position.copy(planeMid); scene.add(border);
+
+  // start marker
+  const startMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.05, 16, 12),
+    new THREE.MeshStandardMaterial({ color:0x39d98a, emissive:0x114427 })
+  );
+  startMarker.position.set(START.x, START.y, PLANE_Z); scene.add(startMarker);
+
+  // ---------- controllers ----------
+  const rayGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), new THREE.Vector3(0,0,-5)]);
+  const controllers = [];
+  let drawingController = null;
+  for (let i=0;i<2;i++){
+    const c = renderer.xr.getController(i);
+    const ray = new THREE.Line(rayGeo, new THREE.LineBasicMaterial({ color:0x8fd3ff }));
+    c.add(ray);
+    c.addEventListener('selectstart', ()=>{ drawingController = c; beginStroke(c); });
+    c.addEventListener('selectend',   ()=>{ if (drawingController===c) drawingController = null; });
+    scene.add(c); controllers.push(c);
+  }
+
+  // ---------- line data + meshes ----------
+  const segments = []; // {a:Vector2, b:Vector2}
+  const segMeshGroup = new THREE.Group(); scene.add(segMeshGroup);
+  const segMat = new THREE.MeshStandardMaterial({ color:0x5ad1ff, emissive:0x0a2230, roughness:0.5 });
+  const cylGeo = new THREE.CylinderGeometry(SEG_RADIUS, SEG_RADIUS, 1, 8);
+
+  function addSegment(a, b){
+    segments.push({ a:a.clone(), b:b.clone() });
+    const m = new THREE.Mesh(cylGeo, segMat);
+    const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy);
+    m.position.set((a.x+b.x)/2, (a.y+b.y)/2, PLANE_Z);
+    m.scale.y = len;
+    m.rotation.z = Math.atan2(dy,dx) - Math.PI/2;
+    segMeshGroup.add(m);
+  }
+  function clearTrack(){
+    segments.length = 0;
+    while (segMeshGroup.children.length) segMeshGroup.remove(segMeshGroup.children[0]);
+  }
+
+  // ---------- drawing ----------
+  const drawPlane = new THREE.Plane(new THREE.Vector3(0,0,1), -PLANE_Z);
+  const raycaster = new THREE.Raycaster();
+  const tmpM = new THREE.Matrix4();
+  const hit = new THREE.Vector3();
+  let lastPoint = null;
+
+  function controllerHit(c){
+    tmpM.identity().extractRotation(c.matrixWorld);
+    raycaster.ray.origin.setFromMatrixPosition(c.matrixWorld);
+    raycaster.ray.direction.set(0,0,-1).applyMatrix4(tmpM).normalize();
+    const p = raycaster.ray.intersectPlane(drawPlane, hit);
+    if (!p) return null;
+    if (hit.x<PLANE_X[0]||hit.x>PLANE_X[1]||hit.y<PLANE_Y[0]||hit.y>PLANE_Y[1]) return null;
+    return new THREE.Vector2(hit.x, hit.y);
+  }
+  function beginStroke(c){ lastPoint = controllerHit(c); }
+  function sampleDraw(){
+    const p = controllerHit(drawingController);
+    if (!p) return;
+    if (!lastPoint){ lastPoint = p; return; }
+    if (p.distanceTo(lastPoint) >= MIN_SEG_LEN){
+      addSegment(lastPoint, p);
+      lastPoint = p.clone();
+    }
+  }
+
+  // ---------- rider ----------
+  const points = [];
+  for (let i=0;i<6;i++) points.push({ pos:new THREE.Vector2(), prev:new THREE.Vector2() });
+  const constraints = CONSTRAINT_DEFS.map(([i,j,type])=>({
+    i, j, type,
+    rest: Math.hypot(REST[i][0]-REST[j][0], REST[i][1]-REST[j][1])
+  }));
+  let crashed = false, simulating = false, spawned = false;
+
+  function spawnRider(){
+    for (let i=0;i<6;i++){
+      points[i].pos.set(START.x+REST[i][0], START.y+REST[i][1]);
+      points[i].prev.copy(points[i].pos);
+    }
+    crashed = false; spawned = true;
+  }
+  function solveConstraints(){
+    for (const con of constraints){
+      if (con.type==='bind' && crashed) continue;
+      const a=points[con.i].pos, b=points[con.j].pos;
+      let dx=b.x-a.x, dy=b.y-a.y;
+      const d=Math.hypot(dx,dy); if (d<1e-6) continue;
+      if (con.type==='bind' && d > con.rest*ENDURANCE){ crashed = true; continue; }
+      const diff=(d-con.rest)/d*0.5; dx*=diff; dy*=diff;
+      a.x+=dx; a.y+=dy; b.x-=dx; b.y-=dy;
+    }
+  }
+  function collidePoint(pt){
+    for (const s of segments){
+      const ax=s.a.x, ay=s.a.y, dx=s.b.x-ax, dy=s.b.y-ay;
+      const len2=dx*dx+dy*dy; if (len2<1e-9) continue;
+      const invLen=1/Math.sqrt(len2);
+      const nx=-dy*invLen, ny=dx*invLen;
+      const t=((pt.pos.x-ax)*dx+(pt.pos.y-ay)*dy)/len2;
+      if (t<-SEG_EXT || t>1+SEG_EXT) continue;
+      const dist=(pt.pos.x-ax)*nx+(pt.pos.y-ay)*ny;
+      const distPrev=(pt.prev.x-ax)*nx+(pt.prev.y-ay)*ny;
+      const penetrating = dist<0 && dist>-THICKNESS;
+      const crossed = distPrev>=0 && dist<0;
+      if (!penetrating && !crossed) continue;
+      pt.pos.x -= nx*dist; pt.pos.y -= ny*dist;            // push to surface
+      const tx=dx*invLen, ty=dy*invLen;                    // friction along tangent
+      let vt=(pt.pos.x-pt.prev.x)*tx+(pt.pos.y-pt.prev.y)*ty;
+      vt*=(1-FRICTION);
+      pt.prev.x = pt.pos.x - tx*vt;
+      pt.prev.y = pt.pos.y - ty*vt;
+    }
+  }
+  function physicsStep(){
+    const g = GRAVITY*DT*DT;
+    for (const pt of points){
+      const px=pt.pos.x, py=pt.pos.y;
+      pt.pos.x += (pt.pos.x-pt.prev.x)*0.999;
+      pt.pos.y += (pt.pos.y-pt.prev.y)*0.999 + g;
+      pt.prev.set(px, py);
+    }
+    for (let it=0; it<CONSTRAINT_ITERS; it++) solveConstraints();
+    for (const pt of points) collidePoint(pt);
+    solveConstraints(); solveConstraints();
+  }
+
+  // ---------- rider meshes ----------
+  const riderGroup = new THREE.Group(); scene.add(riderGroup);
+  const sphereGeo = new THREE.SphereGeometry(0.04*RIDER_SCALE, 12, 10);
+  const sledMat = new THREE.MeshStandardMaterial({ color:0xffcf5a, emissive:0x3a2a00 });
+  const bodyMat = new THREE.MeshStandardMaterial({ color:0xff6a8a, emissive:0x3a0010 });
+  const spheres = [];
+  for (let i=0;i<6;i++){
+    const m = new THREE.Mesh(sphereGeo, i<4?sledMat:bodyMat);
+    riderGroup.add(m); spheres.push(m);
+  }
+  const EDGES = [[0,1],[1,3],[3,2],[2,0],[4,5]];
+  const BINDS = [[4,2],[4,3],[5,3]];
+  function makeLineSegs(pairCount, color){
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(pairCount*2*3), 3));
+    return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color }));
+  }
+  const edgeLines = makeLineSegs(EDGES.length, 0xffcf5a);
+  const bindLines = makeLineSegs(BINDS.length, 0xff6a8a);
+  riderGroup.add(edgeLines); riderGroup.add(bindLines);
+
+  // emoji avatar (snowboarder, mirrored to face the ride direction) — replaces the debug stick figure
+  spheres.forEach(s=>{ s.visible=false; });
+  edgeLines.visible=false; bindLines.visible=false;
+  function makeEmojiTexture(emoji){
+    const S=256, c=document.createElement('canvas'); c.width=c.height=S;
+    const ctx=c.getContext('2d');
+    ctx.translate(S,0); ctx.scale(-1,1);              // mirror horizontally (face ride direction)
+    ctx.font = `${Math.floor(S*0.8)}px serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(emoji, S/2, S/2);
+    const tex=new THREE.CanvasTexture(c); tex.colorSpace=THREE.SRGBColorSpace; tex.anisotropy=4;
+    return tex;
+  }
+  const EMOJI_SIZE = 1.25 * REST[5][1];               // ~ rider height (head y, already scaled)
+  const emojiMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(EMOJI_SIZE, EMOJI_SIZE),
+    new THREE.MeshBasicMaterial({ map:makeEmojiTexture('🏂'), transparent:true, side:THREE.DoubleSide, depthWrite:false })
+  );
+  riderGroup.add(emojiMesh);
+  function writePairs(lineSegs, pairs){
+    const arr = lineSegs.geometry.attributes.position.array; let k=0;
+    for (const [i,j] of pairs){
+      arr[k++]=points[i].pos.x; arr[k++]=points[i].pos.y; arr[k++]=PLANE_Z;
+      arr[k++]=points[j].pos.x; arr[k++]=points[j].pos.y; arr[k++]=PLANE_Z;
+    }
+    lineSegs.geometry.attributes.position.needsUpdate = true;
+  }
+  function updateRiderMeshes(){
+    riderGroup.visible = spawned;
+    if (!spawned) return;
+    const p0=points[0].pos, p1=points[1].pos;          // sled bottom: back -> front
+    const ang=Math.atan2(p1.y-p0.y, p1.x-p0.x);        // sled tilt
+    const ux=-Math.sin(ang), uy=Math.cos(ang);         // sled "up" (left-perp of ride dir)
+    const bcx=(p0.x+p1.x)/2, bcy=(p0.y+p1.y)/2;        // board center
+    const off=EMOJI_SIZE*0.42;                         // lift emoji so the board sits at its base
+    emojiMesh.position.set(bcx+ux*off, bcy+uy*off, PLANE_Z);
+    emojiMesh.rotation.z=ang;
+  }
+
+  // ---------- buttons ----------
+  const btnPrev = { play:false, reset:false, clear:false };
+  function pollButtons(){
+    const session = renderer.xr.getSession(); if (!session) return;
+    let play=false, reset=false, clear=false;
+    for (const src of session.inputSources){
+      const gp = src.gamepad; if (!gp) continue;
+      if (src.handedness==='right'){
+        if (gp.buttons[4]?.pressed) play=true;
+        if (gp.buttons[5]?.pressed) reset=true;
+      } else if (src.handedness==='left'){
+        if (gp.buttons[5]?.pressed) clear=true;
+      }
+    }
+    if (play  && !btnPrev.play)  { if (!spawned) spawnRider(); simulating = !simulating; }
+    if (reset && !btnPrev.reset) { spawnRider(); simulating = false; }
+    if (clear && !btnPrev.clear) { clearTrack(); }
+    btnPrev.play=play; btnPrev.reset=reset; btnPrev.clear=clear;
+  }
+
+  // ---------- loop ----------
+  const clock = new THREE.Clock();
+  let accum = 0;
+  renderer.setAnimationLoop(()=>{
+    const dt = Math.min(clock.getDelta(), 0.05);
+    pollButtons();
+    if (drawingController) sampleDraw();
+    if (simulating && spawned){
+      accum += dt; let steps=0;
+      while (accum>=DT && steps<8){ physicsStep(); accum-=DT; steps++; }
+    }
+    updateRiderMeshes();
+    renderer.render(scene, camera);
+  });
+
+  // ---------- support check (fail-fast) ----------
+  const msg = document.getElementById('msg');
+  if (!navigator.xr){
+    msg.textContent = 'WebXR not available — use a headset browser or the WebXR emulator extension. (Desktop shows a preview only.)';
+  } else {
+    navigator.xr.isSessionSupported('immersive-vr').then(ok=>{
+      if (!ok) msg.textContent = 'Immersive VR not supported on this device.';
+    });
+  }
+  </script>
+</body>
+</html>
