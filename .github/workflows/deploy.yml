@@ -1,0 +1,22 @@
+name: Deploy to davidguevara.dev
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: davidguevara.dev
+          username: claude@davidguevara.dev
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: /home/daviwowb/public_html/
+          exclude: |
+            **/.git*
+            **/.git*/**
