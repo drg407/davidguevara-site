@@ -20,18 +20,3 @@ vr/                     → davidguevara.dev/vr/
 ## Deploy
 
 Pushes to `main` auto-deploy to Namecheap via GitHub Actions (FTP).
-To deploy manually:
-
-```bash
-lftp -c "
-set ssl:verify-certificate no;
-set ftp:passive-mode yes;
-open -u 'claude@davidguevara.dev','<password>' ftp://ftp.davidguevara.dev;
-mirror -R --verbose \
-  --exclude-glob .git \
-  --exclude-glob .github \
-  --exclude-glob .DS_Store \
-  --exclude-glob .gitignore \
-  /path/to/davidguevara-site/ /;
-quit"
-```
