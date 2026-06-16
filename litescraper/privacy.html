@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>liteScraper — Privacy Policy</title>
+    <style>
+        *, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 16px;
+            line-height: 1.7;
+            color: #e0e0e0;
+            background: #0d0d0f;
+            padding: 40px 20px 80px;
+        }
+
+        .container {
+            max-width: 680px;
+            margin: 0 auto;
+            background: #18181c;
+            border-radius: 16px;
+            padding: 48px 52px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 36px;
+        }
+
+        .logo-text {
+            font-size: 18px;
+            font-weight: 700;
+            background: linear-gradient(90deg, #7B68EE, #00C8C8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f0f0f0;
+            margin-bottom: 6px;
+        }
+
+        .last-updated {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 36px;
+        }
+
+        h2 {
+            font-size: 17px;
+            font-weight: 700;
+            color: #f0f0f0;
+            margin-top: 36px;
+            margin-bottom: 10px;
+        }
+
+        p { color: #b0b0b8; margin-bottom: 14px; }
+
+        ul {
+            padding-left: 22px;
+            margin-bottom: 14px;
+            color: #b0b0b8;
+        }
+
+        ul li { margin-bottom: 6px; }
+
+        .highlight {
+            background: rgba(123, 104, 238, 0.08);
+            border-left: 3px solid #7B68EE;
+            border-radius: 0 6px 6px 0;
+            padding: 14px 18px;
+            margin: 24px 0;
+            color: #b0b0b8;
+        }
+
+        a { color: #00C8C8; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        hr {
+            border: none;
+            border-top: 1px solid #2a2a30;
+            margin: 36px 0;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 32px 24px; }
+            h1 { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <div class="logo">
+            <span class="logo-text">liteScraper</span>
+        </div>
+
+        <h1>Privacy Policy</h1>
+        <p class="last-updated">Last updated: June 16, 2026</p>
+
+        <div class="highlight">
+            <strong>The short version:</strong> liteScraper reads files on your Mac, looks up movie metadata from TMDb (and optionally fanart.tv), and writes the results back to your local library. It collects no personal data and stores nothing on any external server.
+        </div>
+
+        <h2>What liteScraper Does</h2>
+        <p>liteScraper is a local macOS utility. You point it at a folder of movie files on your Mac and it:</p>
+        <ul>
+            <li>Reads video filenames to parse movie titles and years</li>
+            <li>Queries <a href="https://www.themoviedb.org" target="_blank">The Movie Database (TMDb)</a> for metadata and artwork using an API key you provide</li>
+            <li>Optionally queries <a href="https://fanart.tv" target="_blank">fanart.tv</a> for additional artwork using an API key you provide</li>
+            <li>Renames and organizes files on your Mac, writes NFO metadata files, and downloads artwork — all into the folder you selected</li>
+        </ul>
+
+        <h2>Data Stored Locally</h2>
+        <p>liteScraper stores the following data <strong>on your Mac only</strong>:</p>
+        <ul>
+            <li>A security-scoped bookmark to the movie folder you selected (in UserDefaults), used to re-open the same folder across sessions</li>
+            <li>Your TMDb API key (stored in Keychain)</li>
+            <li>Your fanart.tv API key, if provided (stored in Keychain)</li>
+            <li>App preferences such as NFO options and the trailer-move toggle (in UserDefaults)</li>
+        </ul>
+
+        <h2>Network Requests</h2>
+        <p>liteScraper makes outgoing HTTPS requests to two services, both controlled by you:</p>
+        <ul>
+            <li><strong>TMDb</strong> — to search for movies and fetch metadata, using the API key you provide</li>
+            <li><strong>fanart.tv</strong> — to fetch premium artwork, only if you supply a fanart.tv API key</li>
+        </ul>
+        <p>These requests contain only the movie title, year, and TMDb movie ID needed to retrieve metadata. No personal information is included. liteScraper does not communicate with any other server.</p>
+
+        <h2>What We Don't Collect</h2>
+        <p>We do not collect, transmit, or store any of the following:</p>
+        <ul>
+            <li>Personal information of any kind</li>
+            <li>Your movie library contents or file paths</li>
+            <li>Analytics, usage data, or crash reports</li>
+            <li>Advertising identifiers</li>
+        </ul>
+
+        <h2>Your API Keys</h2>
+        <p>The TMDb and fanart.tv API keys you provide are stored exclusively in your Mac's Keychain and are only used to make requests to those respective services. They are never sent to us or any other party.</p>
+
+        <h2>Children's Privacy</h2>
+        <p>liteScraper does not knowingly collect any information from anyone, including children under the age of 13.</p>
+
+        <h2>Changes to This Policy</h2>
+        <p>If we make changes to this privacy policy, we will update the date at the top of this page. Continued use of the app after any changes constitutes acceptance of the updated policy.</p>
+
+        <hr>
+
+        <h2>Contact</h2>
+        <p>Questions about this privacy policy? Reach out at <a href="mailto:me@davidguevara.dev">me@davidguevara.dev</a>.</p>
+
+    </div>
+</body>
+</html>
