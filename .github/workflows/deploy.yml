@@ -13,14 +13,17 @@ jobs:
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: davidguevara.dev
+          server: ftp.davidguevara.dev
           username: claude@davidguevara.dev
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: /home/daviwowb/public_html/
-          protocol: ftps
+          server-dir: /
+          protocol: ftp
           security: loose
           port: 21
+          # No dangerous-content-replace — Namecheap keeps cgi-bin/.well-known server-side
           exclude: |
             **/.git*
             **/.git*/**
             .github/**
+            **/.DS_Store
+            .gitignore
