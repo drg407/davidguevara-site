@@ -647,6 +647,7 @@ renderer.setAnimationLoop(() => {
     b.scale.z = dt < 120 ? 1.45 : 1.0;
   }
   sendControllerPoses(now);
+  updateDebug();
   renderer.render(scene, camera);
 });
 
@@ -655,6 +656,24 @@ window.addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// ---------- debug overlay (open the URL with ?debug=1) ----------
+// Visible only in 2D browser (lobby phase) — that is where the WebRTC
+// handshake happens, before Enter VR.
+const debugEl = document.createElement('div');
+{
+  const on = new URLSearchParams(location.search).get('debug') === '1';
+  debugEl.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99;background:rgba(0,0,0,0.78);color:#7df9ff;font:12px/1.4 monospace;padding:6px 10px;white-space:pre;pointer-events:none;';
+  debugEl.style.display = on ? 'block' : 'none';
+  document.body.appendChild(debugEl);
+}
+function updateDebug() {
+  if (debugEl.style.display === 'none') return;
+  if (!pc) { debugEl.textContent = `phase:${phase}  pc:none  (room ${roomCode || '-'})`; return; }
+  const localCands = pc.getIceCandidates ? pc.getIceCandidates().length : -1;
+  const remoteCands = pc.remoteDescription ? (pc.remoteDescription.sdp.match(/a=candidate:/g) || []).length : 0;
+  debugEl.textContent = `phase:${phase}  ice:${pc.iceConnectionState}  gathering:${pc.iceGatheringState}  local cands:${localCands}  remote cands:${remoteCands}  dc:${dc ? dc.readyState : 'none'}  room:${roomCode || '-'}`;
+}
 
 // Debug/test handle (also used by the headless browser checks).
 window.__vrCalc = {
