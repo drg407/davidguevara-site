@@ -13,7 +13,8 @@ litescraper/
 litefin/privacy/index.html          → davidguevara.dev/litefin/privacy/
 vaportracker/privacy/index.html     → davidguevara.dev/vaportracker/privacy/
 enhancerforreddit/privacy/index.html → davidguevara.dev/enhancerforreddit/privacy/
-vr/                                 → davidguevara.dev/vr/
+vr/                                 → davidguevara.dev/vr/  (VR Line Rider)
+calculator/                         → davidguevara.dev/calculator/  (2-player WebXR calculator)
 ```
 
 ## Apps

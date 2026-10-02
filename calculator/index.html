@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VR Calculator — 2 Player</title>
+  <link rel="icon" href="data:,">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #070a14; }
+    canvas { display: block; }
+    #lobby {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(4, 6, 12, 0.82); z-index: 20;
+      font: 14px/1.5 "SF Mono", Menlo, monospace; color: #eaf2ff;
+    }
+    #lobby .card {
+      width: min(640px, 92vw); background: #0d1326; border: 1px solid #24345e;
+      border-radius: 16px; padding: 26px 28px;
+    }
+    #lobby h1 { margin: 0 0 4px; font-size: 20px; }
+    #lobby h1 span { color: #38e8ff; }
+    #lobby .sub { margin: 0 0 18px; color: #7f8db0; font-size: 13px; }
+    #lobby button {
+      background: #1d2540; color: #eaf2ff; border: 1px solid #2f3d6b; border-radius: 10px;
+      padding: 10px 18px; font: inherit; cursor: pointer; margin-right: 10px;
+    }
+    #lobby button:hover { background: #26305a; }
+    #lobby label { display: block; margin: 14px 0 6px; color: #9fb0d8; font-size: 12px; }
+    #lobby textarea {
+      width: 100%; height: 84px; resize: vertical; box-sizing: border-box;
+      background: #070b18; color: #cfe3ff; border: 1px solid #24345e; border-radius: 8px;
+      padding: 8px; font: 11px/1.4 "SF Mono", Menlo, monospace;
+    }
+    #lobby-status { margin-top: 16px; min-height: 20px; font-size: 13px; color: #8fd3ff; }
+    #room-code {
+      font-size: 56px; font-weight: bold; letter-spacing: 22px; text-align: center;
+      color: #38e8ff; margin: 14px 0; min-height: 66px;
+    }
+    #room-input {
+      width: 180px; font-size: 30px; letter-spacing: 14px; text-align: center;
+      background: #070b18; color: #eaf2ff; border: 1px solid #24345e; border-radius: 8px;
+      padding: 8px 4px; font-family: inherit;
+    }
+    .toggle { background: none; border: none; color: #5f6f96; font: 12px inherit; text-decoration: underline; margin-top: 14px; cursor: pointer; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="lobby">
+    <div class="card">
+      <h1>VR Calculator <span>· 2 player</span></h1>
+      <p class="sub">Two headsets, one session — peer-to-peer over WebRTC (no server).
+      Host a code, send it to your friend, they paste it and send one back.
+      Or play solo. On desktop, clicking works.</p>
+      <div id="lobby-modes">
+        <button id="btn-host">Host a game</button>
+        <button id="btn-join">Join with code</button>
+        <button id="btn-solo">Play solo</button>
+      </div>
+      <div id="host-view" hidden>
+        <div id="relay-host-box" hidden>
+          <label>Your room code — tell your friend these 4 digits:</label>
+          <div id="room-code">····</div>
+          <button class="toggle" id="paste-toggle-host">Use copy-paste codes instead</button>
+        </div>
+        <div id="paste-host-box" hidden>
+          <label for="host-code">Your join code — send this to your friend (iMessage/WhatsApp):</label>
+          <textarea id="host-code" readonly placeholder="Generating code…"></textarea>
+          <label for="answer-input">Paste your friend's answer code:</label>
+          <textarea id="answer-input" placeholder="Paste here…"></textarea>
+          <div style="margin-top:12px; display:flex; gap:10px;">
+            <button id="btn-paste-answer">Connect</button>
+          </div>
+        </div>
+        <div style="margin-top:12px; display:flex; gap:10px;">
+          <button id="btn-cancel-host" style="background:transparent; color:#8fa0c8;">Cancel</button>
+        </div>
+      </div>
+      <div id="join-view" hidden>
+        <div id="relay-join-box" hidden>
+          <label for="room-input">Room code (4 digits):</label>
+          <div style="margin:10px 0; display:flex; gap:12px; align-items:center;">
+            <input id="room-input" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="4721">
+            <button id="btn-relay-join">Join room</button>
+          </div>
+          <button class="toggle" id="paste-toggle-join">Use copy-paste codes instead</button>
+        </div>
+        <div id="paste-join-box" hidden>
+          <label for="offer-input">Paste the host's code:</label>
+          <textarea id="offer-input" placeholder="Paste here…"></textarea>
+          <div style="margin-top:12px; display:flex; gap:10px;">
+            <button id="btn-make-answer">Create my code</button>
+          </div>
+          <label id="join-code-label" for="join-code" hidden>Your answer code — send this back to the host:</label>
+          <textarea id="join-code" hidden readonly></textarea>
+        </div>
+        <div style="margin-top:12px; display:flex; gap:10px;">
+          <button id="btn-cancel-join" style="background:transparent; color:#8fa0c8;">Cancel</button>
+        </div>
+      </div>
+      <div id="lobby-status"></div>
+    </div>
+  </div>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
